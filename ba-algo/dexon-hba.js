@@ -247,7 +247,7 @@ class DEXONNode extends Node {
             // TODO: check illegal precommit
             this.precommits[msg.iter].push(msg);
             // check: update lock value and go to next iter
-            if (msg.iter > this.lock.iter) {
+            if (msg.iter >= this.iter) {
                 this.updateLockRound(msg.iter);
             }
             if (this.step === 2 && !this.hasFastCommitted) {
