@@ -105,7 +105,7 @@ class AlgorandNode extends Node {
             const proposeMsg = { 
                 type: 'propose',
                 p: this.p, 
-                randomness: Math.floor(Math.random() * 10000 + 1),
+                randomness: Math.floor(Math.random() * 1000000000 + 1),
                 sender: this.nodeID
             };
             if (this.p === 1 || (this.p >= 2 && conditions.isBot)) {

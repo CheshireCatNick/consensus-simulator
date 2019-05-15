@@ -247,7 +247,7 @@ class DEXONNode extends Node {
             // TODO: check illegal precommit
             this.precommits[msg.iter].push(msg);
             // check: update lock value and go to next iter
-            if (msg.iter > this.lock.iter) {
+            if (msg.iter === 0 || msg.iter >= this.iter) {
                 this.updateLockRound(msg.iter);
             }
             if (this.step === 2 && !this.hasFastCommitted) {
@@ -406,7 +406,7 @@ class DEXONNode extends Node {
         };
         this.lambda = config.lambda;
         this.v = uuid();
-        this.y = Math.floor(Math.random() * 10000 + 1);
+        this.y = Math.floor(Math.random() * 1000000000 + 1);
         this.registerTimeEvent({ name: '', params: { iter: this.iter, step: 1 } }, 0);
     }
 }
