@@ -1,28 +1,28 @@
 module.exports = {
 	// node
-	nodeNum: 16,
+	nodeNum: 32,
 	byzantineNodeNum: 0,
 	// ba
 	useExternalBA: false,
 	// ba specific param
 	lambda: 1,
-	BAType: 'aba',
+	BAType: 'vmware-ba/vrf',
 	configPath: '/Users/nicky/general-consensus-platform/tendermint/mytestnet/node',
 	// network env
 	networkType: 'tcp-json',
 	host: 'localhost',
 	port: 36251,
 	networkDelay: {
-		mean: 4,
-		std: 1
+		mean: 0.25,
+		std: 0.05
 	},
 	startDelay: 0,
 	// simulator
 	showDashboard: false,
 	// attacker
-	attacker: 'attacker',
+	attacker: 'vmware-attacker/adaptive-attacker',
 	// repeat
-	repeatTime: 10
+	repeatTime: 100
 };
 /* fast todo
 	2. cachin ba

@@ -14,8 +14,7 @@ class StaticAttacker extends Attacker {
             return returnPackets;
         }
         else if (this.mode === 'vrf' && 
-            returnPackets[0].content.type === 'fl-propose' && 
-            packets.length === 1) {
+            returnPackets[0].content.type === 'fl-propose') {
             const msg = returnPackets[0].content;
             this.propose.push(msg);
             if (this.propose.length === 
@@ -73,8 +72,8 @@ class StaticAttacker extends Attacker {
     constructor(transfer, registerTimeEvent) {
         super(transfer, registerTimeEvent);
         this.byzantines = [];
-        this.maxByzantineNodeNum = (config.nodeNum % 3 === 0) ?
-            config.nodeNum / 3 - 1 : Math.floor(config.nodeNum / 3);
+        this.maxByzantineNodeNum = (config.nodeNum % 2 === 0) ?
+            config.nodeNum / 2 - 1 : Math.floor(config.nodeNum / 2);
 		for (let nodeID = 2; nodeID <= this.maxByzantineNodeNum + 1; nodeID++) {
             this.byzantines.push('' + nodeID);
         }

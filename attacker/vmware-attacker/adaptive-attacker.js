@@ -104,13 +104,13 @@ class AdaptiveAttacker extends Attacker {
 
     constructor(transfer, registerTimeEvent) {
         super(transfer, registerTimeEvent);
-        this.f = (config.nodeNum % 3 === 0) ?
-            config.nodeNum / 3 - 1 : Math.floor(config.nodeNum / 3);
+        this.f = (config.nodeNum % 2 === 0) ?
+            config.nodeNum / 2 - 1 : Math.floor(config.nodeNum / 2);
         this.propose = [];
         this.elect = [];
         this.flPropose = [];
         this.byzantines = [];
-        this.mode = 'adaptive';
+        this.mode = 'vrf';
     }
 }
 
