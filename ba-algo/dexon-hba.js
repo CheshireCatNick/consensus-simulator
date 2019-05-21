@@ -209,6 +209,7 @@ class DEXONNode extends Node {
     }
 
     triggerMsgEvent(msgEvent) {
+        super.triggerMsgEvent(msgEvent);
         const msg = msgEvent.packet.content;        
         this.logger.info(['recv', this.logger.round(msgEvent.triggeredTime), JSON.stringify(msg)]);
         // for testing
@@ -354,6 +355,7 @@ class DEXONNode extends Node {
         this.reportToSystem();
     }
     triggerTimeEvent(timeEvent) {
+        super.triggerTimeEvent(timeEvent);
         const functionMeta = timeEvent.functionMeta;        
         // prevent older events
         if (functionMeta.params.iter < this.iter) return;

@@ -271,6 +271,7 @@ class VMwareNode extends Node {
     }
 
     triggerMsgEvent(msgEvent) {
+        super.triggerMsgEvent(msgEvent);
         const msg = msgEvent.packet.content;
         this.logger.info(['recv', this.logger.round(msgEvent.triggeredTime), JSON.stringify(msg)]);
         if (this.isDecided) {
@@ -348,6 +349,7 @@ class VMwareNode extends Node {
     }
 
     triggerTimeEvent(timeEvent) {
+        super.triggerTimeEvent(timeEvent);
         if (this.isDecided) {
             return;
         }

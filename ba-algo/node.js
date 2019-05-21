@@ -5,9 +5,13 @@ require('../lib/fp');
 class Node {
     reportToSystem() {}
 
-    triggerMsgEvent(msgEvent) {}
+    triggerMsgEvent(msgEvent) {
+        this.clock = msgEvent.triggeredTime;
+    }
 
-    triggerTimeEvent(timeEvent) {}
+    triggerTimeEvent(timeEvent) {
+        this.clock = timeEvent.triggeredTime;
+    }
 
     send(src, dst, msg) {
         if (this.isCooling) {
@@ -19,7 +23,8 @@ class Node {
         const packet = {
             src: src,
             dst: dst,
-            content: msg
+            content: msg,
+            sendTime: this.clock
         };
         this.network.transfer(packet);
     }
@@ -31,6 +36,7 @@ class Node {
         this.isCooling = false;
         this.network = network;
         this.registerTimeEvent = registerTimeEvent;
+        this.clock = 0;
         this.reportTimer = setInterval(() => {
             this.reportToSystem();
         }, 1000);

@@ -6,7 +6,7 @@ module.exports = {
 	useExternalBA: false,
 	// ba specific param
 	lambda: 1,
-	BAType: 'vmware-ba/vrf',
+	BAType: 'pbft',
 	configPath: '/Users/nicky/general-consensus-platform/tendermint/mytestnet/node',
 	// network env
 	networkType: 'tcp-json',
@@ -20,7 +20,7 @@ module.exports = {
 	// simulator
 	showDashboard: false,
 	// attacker
-	attacker: 'vmware-attacker/adaptive-attacker',
+	attacker: 'attacker',
 	// repeat
 	repeatTime: 100
 };

@@ -156,6 +156,7 @@ class ABANode extends Node {
     }
     // receive from network
     triggerMsgEvent(msgEvent) {
+        super.triggerMsgEvent(msgEvent);
         const msg = msgEvent.packet.content;
         this.logger.info(['recv', JSON.stringify(msg)]);
         /*
@@ -242,6 +243,7 @@ class ABANode extends Node {
     }
 
     triggerTimeEvent(timeEvent) {
+        super.triggerTimeEvent(timeEvent);
         this.broadcast2pc(this.initV);
     }
 

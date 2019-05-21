@@ -232,6 +232,7 @@ class AlgorandNode extends Node {
     }
 
     triggerMsgEvent(msgEvent) {
+        super.triggerMsgEvent(msgEvent);
         const msg = msgEvent.packet.content;        
         this.logger.info(['recv', this.logger.round(msgEvent.triggeredTime), this.step, JSON.stringify(msg)]);
         if (this.isDecided) {
@@ -328,6 +329,7 @@ class AlgorandNode extends Node {
     }
 
     triggerTimeEvent(timeEvent) {
+        super.triggerTimeEvent(timeEvent);
         const functionMeta = timeEvent.functionMeta;        
         // prevent older events
         if (functionMeta.params.p < this.p) return;

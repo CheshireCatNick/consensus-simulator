@@ -54,6 +54,7 @@ class PBFTNode extends Node {
     }
 
     triggerMsgEvent(msgEvent) {
+        super.triggerMsgEvent(msgEvent);
         const msg = msgEvent.packet.content;
         this.logger.info(['recv', 
             this.logger.round(msgEvent.triggeredTime),
@@ -423,6 +424,7 @@ class PBFTNode extends Node {
     }
 
     triggerTimeEvent(timeEvent) {
+        super.triggerTimeEvent(timeEvent);
         const functionMeta = timeEvent.functionMeta;
         switch (functionMeta.name) {
         case 'start':
