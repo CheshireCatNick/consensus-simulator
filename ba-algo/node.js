@@ -37,9 +37,10 @@ class Node {
         this.network = network;
         this.registerTimeEvent = registerTimeEvent;
         this.clock = 0;
+        /*
         this.reportTimer = setInterval(() => {
             this.reportToSystem();
-        }, 1000);
+        }, 1000);*/
     }
 
     destroy() {

@@ -57,13 +57,13 @@ class Simulator {
         this.simulationResults.push({
             latency: this.clock,
             msgBytes: this.network.totalMsgBytes,
-            msgCount: this.network.msgCount
+            msgCount: this.network.msgCount,
+            totalMsgCount: this.network.totalMsgCount
         });
         // kill all child processes
         // attacker update param may register events
-        this.eventQ = new FastPriorityQueue((eventA, eventB) => {
-            return eventA.triggeredTime < eventB.triggeredTime;
-        });
+        this.eventQ.removeMany(() => true);
+        this.eventQ.trim();
         this.clock = 0;
         if (this.network.attacker.updateParam() || 
             (this.repeatTime < config.repeatTime)) {
@@ -107,6 +107,7 @@ class Simulator {
                 process.stdout.write(`${p(math.mean(msgCounts))},${p(math.std(msgCounts))},`);
             });
             process.stdout.write(`${p(math.mean(l))}, ${p(math.std(l))}`);
+            
         }
         /*
         if (!this.childKillSent) {
@@ -155,7 +156,7 @@ class Simulator {
             }
         }
         // main loop
-        setInterval(() => {
+        while (true) {
             if (this.eventQ.isEmpty()) return;
             // pop events that should be processed
             const timeEvents = [];
@@ -195,7 +196,7 @@ class Simulator {
             });
             // process all events at the same time and then judge
             this.judge();
-        }, this.tick);
+        }
     }
 
     constructor() {
