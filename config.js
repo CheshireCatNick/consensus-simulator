@@ -1,6 +1,6 @@
 module.exports = {
 	// node
-	nodeNum: 16,
+	nodeNum: 64,
 	byzantineNodeNum: 0,
 	// ba
 	useExternalBA: false,

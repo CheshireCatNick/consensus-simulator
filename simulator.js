@@ -44,7 +44,6 @@ class Simulator {
             (finalStates.every(state => state.decidedValue === finalStates[0].decidedValue));
         if (!agreementPass) process.exit(0);
         const maxRound = finalStates.map(state => state.round).max();
-        const timeSpent = Date.now() - this.network.startTime;
         this.infos.system[0] = `test #${this.repeatTime}, ` +
             `agreementPass: ${agreementPass}, ` + 
             `maxRound: ${maxRound}, ` + 
@@ -107,7 +106,15 @@ class Simulator {
                 process.stdout.write(`${p(math.mean(msgCounts))},${p(math.std(msgCounts))},`);
             });
             process.stdout.write(`${p(math.mean(l))}, ${p(math.std(l))}`);
-            
+            console.log();
+            console.log(`simulation time: ${new Date() - this.simulationStartTime}`);
+            this.simulationResults.forEach((result) => {
+                process.stdout.write(`${p(result.latency * 10, 1) / 10}, `);
+            });
+            console.log();
+            this.simulationResults.forEach((result) => {
+                process.stdout.write(`${result.totalMsgCount}, `);
+            }); 
         }
         /*
         if (!this.childKillSent) {
@@ -200,6 +207,7 @@ class Simulator {
     }
 
     constructor() {
+        this.simulationStartTime = new Date();
         Logger.clearLogDir();
         // dashboard
         this.infos = {
