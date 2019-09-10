@@ -1,11 +1,11 @@
 module.exports = {
 	// node
-	nodeNum: 64,
+	nodeNum: 256,
 	byzantineNodeNum: 0,
 	// ba
 	useExternalBA: false,
 	// ba specific param
-	lambda: 1,
+	lambda: 2,
 	BAType: 'pbft',
 	configPath: '/Users/nicky/general-consensus-platform/tendermint/mytestnet/node',
 	// network env

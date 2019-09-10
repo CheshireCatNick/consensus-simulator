@@ -114,7 +114,8 @@ class Simulator {
             console.log();
             this.simulationResults.forEach((result) => {
                 process.stdout.write(`${result.totalMsgCount}, `);
-            }); 
+            });
+            process.exit(0);
         }
         /*
         if (!this.childKillSent) {
