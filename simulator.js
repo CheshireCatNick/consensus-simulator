@@ -185,6 +185,7 @@ class Simulator {
                         attackerTimeEvents.push(event);
                 }
             }
+            this.eventQ.trim();
             //console.log(`clock: ${this.clock}`);            
             // process attacker event
             attackerTimeEvents.forEach((event) => {

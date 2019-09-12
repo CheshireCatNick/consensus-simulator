@@ -6,7 +6,7 @@ module.exports = {
 	useExternalBA: false,
 	// ba specific param
 	lambda: 2,
-	BAType: 'pbft',
+	BAType: 'aba',
 	configPath: '/Users/nicky/general-consensus-platform/tendermint/mytestnet/node',
 	// network env
 	networkType: 'tcp-json',
