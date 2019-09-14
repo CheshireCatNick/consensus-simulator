@@ -67,6 +67,7 @@ class AdaptiveAttacker extends Attacker {
                         return (msgA.y < msgB.y) ? 1 : -1;
                     });
                     const bestProposal = this.elect[0];
+
                     //console.log(bestProposal);
                     // adapt leader
                     if (this.byzantines.has(bestProposal.sender)) {
@@ -110,7 +111,7 @@ class AdaptiveAttacker extends Attacker {
         this.elect = [];
         this.flPropose = [];
         this.byzantines = [];
-        this.mode = 'vrf';
+        this.mode = 'adaptive';
     }
 }
 

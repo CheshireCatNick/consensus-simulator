@@ -58,7 +58,6 @@ class Partitioner extends Attacker {
 		this.partitionResolveTime = 60;
 		this.partitionDelay = { mean: 4, std: 1 };
 		this.isPartitionResolved = false;
-
 		const partitionNum = 3;
 		const correctNodeNum = config.nodeNum - config.byzantineNodeNum;
 		const boundaries = [];

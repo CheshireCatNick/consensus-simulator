@@ -50,7 +50,6 @@ class DEXONNode extends Node {
                 //this.lambda = config.lambda * Math.pow(2, this.iter - 1); 
                 // directly jump to step 4
                 this.step = 4;
-                //clearTimeout(this.clock);
                 this.runBALogic();
             }
             return true;
@@ -72,7 +71,6 @@ class DEXONNode extends Node {
             });
             this.decidedValue = r.value;
             this.isDecided = true;
-            //clearTimeout(this.clock);
             // immediately report to system when decide
             this.reportToSystem();
             return true;
@@ -86,7 +84,6 @@ class DEXONNode extends Node {
             // dynamic lambda
             //this.lambda = config.lambda * Math.pow(2, this.iter - 1);
             this.step = 4;
-            //clearTimeout(this.clock);
             this.runBALogic();
             return true;
         }
@@ -117,15 +114,10 @@ class DEXONNode extends Node {
                 this.precommits[0].push(precomMsg);
                 this.send(this.nodeID, 'broadcast', precomMsg);
                 this.step = 2;
+
                 this.registerTimeEvent(
                     { name: 'runBALogic', params: { iter: this.iter, step: 3 } },
                     3 * this.lambda * 1000);
-                /*
-                this.clock = setTimeout(() => {
-                    // start standard BA
-                    this.step = 3;
-                    this.runBALogic();
-                }, 3 * this.lambda * 1000);*/
             }
             else {
                 // not pioneer
@@ -133,11 +125,6 @@ class DEXONNode extends Node {
                 this.registerTimeEvent(
                     { name: 'runBALogic', params: { iter: this.iter, step: 3 } },
                     3 * this.lambda * 1000);
-                /*
-                this.clock = setTimeout(() => {
-                    this.step = 3;
-                    this.runBALogic();
-                }, 3 * this.lambda * 1000);*/
             }
             break;
         }
@@ -160,11 +147,6 @@ class DEXONNode extends Node {
                 this.registerTimeEvent(
                     { name: 'runBALogic', params: { iter: this.iter, step: 4 } },
                     2 * this.lambda * 1000);
-                /*
-                this.clock = this.clock = setTimeout(() => {
-                    this.step = 4;
-                    this.runBALogic();
-                }, 2 * this.lambda * 1000);*/
             }
             break;
         }
@@ -187,11 +169,6 @@ class DEXONNode extends Node {
             this.registerTimeEvent(
                 { name: 'runBALogic', params: { iter: this.iter, step: 5 } },
                 2 * this.lambda * 1000);
-            /*
-            this.clock = setTimeout(() => {
-                this.step = 5;
-                this.runBALogic();
-            }, 2 * this.lambda * 1000);*/
             break;
         }
         case 5: {
@@ -354,6 +331,7 @@ class DEXONNode extends Node {
         }
         this.reportToSystem();
     }
+  
     triggerTimeEvent(timeEvent) {
         super.triggerTimeEvent(timeEvent);
         const functionMeta = timeEvent.functionMeta;        
