@@ -2,6 +2,7 @@
 
 const Node = require('./node');
 const uuid = require('uuid/v4');
+const config = require('../config');
 
 class PBFTNode extends Node {
     // extend vector v to be able to access v[n] = array
@@ -52,12 +53,17 @@ class PBFTNode extends Node {
         return (count >= 2 * this.f + 1);
     }
 
-    receive(msg) {
-        this.logger.info(['recv', JSON.stringify(msg)]);
+    triggerMsgEvent(msgEvent) {
+        super.triggerMsgEvent(msgEvent);
+        const msg = msgEvent.packet.content;
+        this.logger.info(['recv', 
+            this.logger.round(msgEvent.triggeredTime),
+            JSON.stringify(msg)]);
         if (this.isInViewChange &&
             (msg.type !== 'checkpoint' &&
             msg.type !== 'view-change' &&
-            msg.type !== 'new-view')) {
+            msg.type !== 'new-view' &&
+            msg.type !== 'decide')) {
             return;
         }
         if (msg.type === 'pre-prepare') {
@@ -69,28 +75,36 @@ class PBFTNode extends Node {
             this.extendVector2D(this.prePrepare, msg.v, msg.n);
             // pre-prepare[v][n] should only have one message
             if (this.prePrepare[msg.v][msg.n].length === 0) {
-                clearTimeout(this.receiveTimer);
+                //clearTimeout(this.receiveTimer);
+                this.hasReceiveRequest = true;
+                /*
                 this.receiveTimer = setTimeout(() => {
                     // did not receive any message in receive timeout
                     if (!this.isInViewChange) {
                         this.logger.info(['did not receive any request']);
                         this.startViewChange();
                     }
-                }, this.receiveTimeout * 1000);
+                }, this.receiveTimeout * 1000);*/
+                if (msg === undefined) process.exit(0);
                 this.prePrepare[msg.v][msg.n].push(msg);
                 if (this.digest[msg.d] === undefined) {
                     this.digest[msg.d] = {
                         isReceived: true,
                         isPrepared: false,
                         isDecided: false,
+                        /*
                         // check if a request is executed in time
                         timer: setTimeout(() => {
                             if (!this.isInViewChange) {
                                 this.logger.info(['not executed in time']);
                                 this.startViewChange();
                             }
-                        }, this.executeTimeout * 1000)
+                        }, this.executeTimeout * 1000)*/
                     };
+                    this.registerTimeEvent(
+                        { name: 'executeTimeout', params: { d: msg.d, v: msg.v } }, 
+                        this.executeTimeout * 1000
+                    );
                 }
                 // send prepare
                 const prepareMsg = {
@@ -105,7 +119,10 @@ class PBFTNode extends Node {
                 this.send(this.nodeID, 'broadcast', prepareMsg);
             }
             else {
-                this.logger.warning(['pre-prepare conflict']);
+                console.log(`${this.nodeID}, normal prepare conflict`);
+                console.log('1', this.prePrepare[msg.v][msg.n][0]);
+                console.log('2', msg);
+                this.logger.warning(['normal pre-prepare conflict']);
             }
         }
         else if (msg.type === 'prepare') {
@@ -150,13 +167,22 @@ class PBFTNode extends Node {
             }
             // check committed local
             if (this.isCommittedLocal(msg.d, msg.v, msg.n)) {
-                clearTimeout(this.digest[msg.d].timer);
+                //clearTimeout(this.digest[msg.d].timer);
                 this.digest[msg.d].isDecided = true;
                 this.lastDecidedSeq = msg.n;
                 this.lastDecidedRequest = msg.d;
                 this.logger.info(['decide', msg.d]);
                 this.isDecided = true;
+                //console.log(`${this.nodeID} decides`);
                 this.reportToSystem();
+                const decideMsg = {
+                    type: 'decide',
+                    n: msg.n,
+                    d: msg.d,
+                    i: this.nodeID,
+                    proof: this.commit[msg.v][msg.n].filter(comMsg => (comMsg.d === msg.d))
+                };
+                this.send(this.nodeID, 'broadcast', decideMsg);
                 if (msg.n % this.checkpointPeriod === 0) {
                     const checkpointMsg = {
                         type: 'checkpoint',
@@ -169,6 +195,33 @@ class PBFTNode extends Node {
                     this.send(this.nodeID, 'broadcast', checkpointMsg);
                 }
             }
+        }
+        else if (msg.type === 'decide') {
+            if (this.digest[msg.d] && this.digest[msg.d].isDecided) {
+                return;
+            }
+            if (this.digest[msg.d] === undefined) {
+                this.digest[msg.d] = {
+                    isReceived: true,
+                    isPrepared: true,
+                    isDecided: true,
+                };
+            }
+            this.digest[msg.d].isDecided = true;
+            this.lastDecidedSeq = msg.n;
+            this.lastDecidedRequest = msg.d;
+            this.logger.info(['decide', msg.d]);
+            this.isDecided = true;
+            //console.log(`${this.nodeID} decides`);
+            this.reportToSystem();            
+            const decideMsg = {
+                type: 'decide',
+                n: msg.n,
+                d: msg.d,
+                i: this.nodeID,
+                proof: msg.proof
+            };
+            this.send(this.nodeID, 'broadcast', decideMsg);
         }
         else if (msg.type === 'checkpoint') {
             this.extendVector(this.checkpoint, msg.n);
@@ -187,27 +240,33 @@ class PBFTNode extends Node {
         else if (msg.type === 'view-change') {
             // somehow verify this is a reasonable view change msg
             // checkpoint proof is provided
+            if (msg.v <= this.view) return;
             this.extendVector(this.viewChange, msg.v);
             this.viewChange[msg.v].push(msg);
-            if (this.isPrimary) {
-                return;
+            if (this.viewChange[msg.v].length >= this.f + 1 &&
+                !this.isInViewChange && msg.v > this.view) {
+                this.startViewChange(msg.v);
             }
             if (this.viewChange[msg.v].length >= 2 * this.f + 1 &&
-                (msg.v % this.nodeNum) === (parseInt(this.nodeID) - 1)) {
+                (msg.v % this.nodeNum) === (parseInt(this.nodeID) - 1) &&
+                !this.isPrimary) {
                 this.logger.info(['start as a primary']);
                 this.isPrimary = true;
                 this.isInViewChange = false;
                 this.view = msg.v;
-                const minS = this.viewChange[msg.v]
+                let minS = this.viewChange[msg.v]
                     .map(msg => msg.n)
                     .max();
+                //minS = minS < 0 ? 0 : minS;
                 const allPrePrepare = this.viewChange[msg.v]
                     .map(msg => msg.P)
                     .map(P => P.map(Pm => Pm['pre-prepare']))
                     .flat();
-                const maxS = (allPrePrepare.length === 0) ?
+                let maxS = (allPrePrepare.length === 0) ?
                     minS : allPrePrepare.map(msg => msg.n).max();
+                //maxS = maxS < 0 ? 0 : maxS;
                 const O = [];
+                this.newViewPrepareMsgs = [];
                 for (let n = minS + 1; n <= maxS; n++) {
                     const pmsg = allPrePrepare.find(msg => msg.n === n);
                     const d = (pmsg === undefined) ? 'nop' : pmsg.d;
@@ -224,6 +283,7 @@ class PBFTNode extends Node {
                         d: d
                     };
                     this.extendVector2D(this.prePrepare, msg.v, n);
+                    if (prePrepareMsg === undefined) process.exit(0);
                     this.prePrepare[msg.v][n].push(prePrepareMsg);
                     const prepareMsg = {
                         type: 'prepare',
@@ -235,15 +295,21 @@ class PBFTNode extends Node {
                     this.extendVector2D(this.prepare, msg.v, n);
                     this.prepare[msg.v][n].push(prepareMsg);
                     // broadcast this after every node enter view v
+                    this.newViewPrepareMsgs.push(prepareMsg);
+                    /*
                     setTimeout(() => {
                         this.send(this.nodeID, 'broadcast', prepareMsg);
-                    }, 1 * 1000);
+                    }, 1 * 1000);*/
                     O.push({
                         v: msg.v,
                         n: n,
                         d: d
                     });
                 }
+                this.registerTimeEvent(
+                    { name: 'broadcastNewViewPrepare' },
+                    this.lambda * 1000
+                );
                 const newViewMsg = {
                     type: 'new-view',
                     v: msg.v,
@@ -254,12 +320,25 @@ class PBFTNode extends Node {
                 // next seq starts from maxS + 1
                 this.seq = maxS + 1;
                 // start as primary after every node enter view v
+                this.registerTimeEvent(
+                    { name: 'issueRequest' },
+                    this.lambda * 1000
+                );
+                /*
                 setTimeout(() => {
                     this.startPrimary();
-                }, 2 * 1000);
+                }, 2 * 1000);*/
+            }
+            else if (this.viewChange[msg.v].length >= 2 * this.f + 1) {
+                this.registerTimeEvent(
+                    { name: 'skipToNextView', params: { oldView: this.oldView } }, 
+                    this.viewChangeTimeout * 1000
+                );
             }
         }
         else if (msg.type === 'new-view') {
+            // do not view change to smaller view
+            if (msg.v <= this.view) return;
             // new primary
             if (this.isPrimary &&
                 (msg.v % this.nodeNum) === (parseInt(this.nodeID) - 1)) {
@@ -268,10 +347,11 @@ class PBFTNode extends Node {
             // old primary
             if (this.isPrimary) {
                 this.logger.info(['switch to backup node']);
-                clearInterval(this.proposeTimer);
+                //clearInterval(this.proposeTimer);
                 this.isPrimary = false;
             }
             // somehow verify O and V is reasonable
+            this.logger.info(['enter new view', `${this.view} -> ${msg.v}`]);            
             this.view = msg.v;
             this.isInViewChange = false;
             msg.O.forEach(msg => {
@@ -280,19 +360,25 @@ class PBFTNode extends Node {
                 // pre-prepare[v][n] should only have one message
                 if (this.prePrepare[msg.v][msg.n].length === 0) {
                     // re-consensus d
+                    if (msg === undefined) process.exit(0);
                     this.prePrepare[msg.v][msg.n].push(msg);
                     this.digest[msg.d] = {
                         isReceived: true,
                         isPrepared: false,
                         isDecided: false,
                         // check if a request is executed in time
+                        /*
                         timer: setTimeout(() => {
                             if (!this.isInViewChange) {
                                 this.logger.info(['not executed in time']);
                                 this.startViewChange();
                             }
-                        }, this.executeTimeout * 1000)
+                        }, this.executeTimeout * 1000)*/
                     };
+                    this.registerTimeEvent(
+                        { name: 'executeTimeout', params: { d: msg.d, v: msg.v } },
+                        this.executeTimeout * 1000
+                    );
                     // send prepare
                     const prepareMsg = {
                         type: 'prepare',
@@ -307,24 +393,113 @@ class PBFTNode extends Node {
                     this.send(this.nodeID, 'broadcast', prepareMsg);
                 }
                 else {
-                    this.logger.warning(['pre-prepare conflict']);
+                    console.log(`${this.nodeID}, view-change pre-prepare conflict`);
+                    console.log('1', this.prePrepare[msg.v][msg.n][0]);
+                    console.log('2', msg);
+                    this.logger.warning(['view change pre-prepare conflict']);
                 }
             });
+            this.hasReceiveRequest = false;
+            this.registerTimeEvent(
+                { 
+                    name: 'receiveTimeout',
+                    params: {
+                        v: this.view
+                    }
+                },
+                this.receiveTimeout * 1000
+            );
+            /*
             this.receiveTimer = setTimeout(() => {
                 // did not receive any message in receive timeout
                 if (!this.isInViewChange) {
                     this.logger.info(['did not receive any request']);
                     this.startViewChange();
                 }
-            }, this.receiveTimeout * 1000);
+            }, this.receiveTimeout * 1000);*/
         }
         else {
             this.logger.warning(['undefined msg type']);
         }
     }
 
-    startViewChange() {
-        this.logger.info(['start a view change']);
+    triggerTimeEvent(timeEvent) {
+        super.triggerTimeEvent(timeEvent);
+        const functionMeta = timeEvent.functionMeta;
+        switch (functionMeta.name) {
+        case 'start':
+            this.start();
+            break;
+        case 'issueRequest':
+            if (this.isPrimary) {
+                this.issueRequest();
+            }
+            break;
+        case 'receiveTimeout':
+            if (this.hasReceiveRequest) {
+                this.hasReceiveRequest = false;
+                this.registerTimeEvent(
+                    { 
+                        name: 'receiveTimeout',
+                        params: {
+                            v: this.view
+                        }
+                    },
+                    this.receiveTimeout * 1000
+                );
+            }
+            else if (!this.isInViewChange && this.view === functionMeta.params.v) {
+                this.logger.info(['did not receive any request']);
+                this.startViewChange(this.view + 1);
+            }
+            break;
+        case 'executeTimeout':
+            if (!this.digest[functionMeta.params.d].isDecided && 
+                !this.isInViewChange && functionMeta.params.v === this.view) {
+                this.logger.info([timeEvent.triggeredTime, 'not executed in time', functionMeta.params.d]);
+                this.startViewChange(this.view + 1);
+            }
+            break;
+        case 'broadcastNewViewPrepare':
+            this.newViewPrepareMsgs.forEach(
+                msg => this.send(this.nodeID, 'broadcast', msg)
+            );
+            break;
+        case 'skipToNextView':
+            if (functionMeta.params.oldView !== this.view) {
+                this.skipToNextView(functionMeta.params.oldView);
+            }
+            break;
+        default:
+            console.log('undefined function name');
+            process.exit(0);
+        }
+    }
+
+    // if the next primary is also dead
+    skipToNextView(oldView) {
+        if (this.view === this.oldView) {
+            this.logger.info(['skip to next view']);
+            const view = this.viewChangeMsg.v;
+            this.viewChangeMsg.v = view + 1;
+            this.extendVector(this.viewChange, view + 1);
+            const tvc = JSON.parse(JSON.stringify(this.viewChangeMsg));
+            this.viewChange[view + 1].push(tvc);
+            this.send(this.nodeID, 'broadcast', tvc);
+            this.viewChangeTimeout *= 2;
+            this.executeTimeout *= 2;
+            this.receiveTimeout *= 2;
+            this.logger.info([`doubling timeout ${this.viewChangeTimeout} ${this.executeTimeout} ${this.receiveTimeout}`]);
+
+            this.registerTimeEvent(
+                { name: 'skipToNextView', params: { oldView: oldView } }, 
+                this.viewChangeTimeout * 1000
+            );
+        }
+    }
+
+    startViewChange(nextView) {
+        this.logger.info([`start a view change to ${nextView}`]);
         this.isInViewChange = true;
 
         const p = (this.prePrepare[this.view] === undefined) ? [] :
@@ -344,21 +519,23 @@ class PBFTNode extends Node {
                             .filter(_msg => _msg.d === msg.d)
                 };
             });
-        const viewChangeMsg = {
+        this.viewChangeMsg = {
             type: 'view-change',
-            v: this.view + 1,
+            v: nextView,
             n: this.lastStableCheckpoint,
-            C: (this.lastStableCheckpoint < 0) ? [] :
+            C: (this.lastStableCheckpoint <= 0) ? [] :
                 this.checkpoint[this.lastStableCheckpoint]
                     .groupBy(msg => msg.d)
                     .maxBy(pair => pair[1].length)[1],
             P: p,
             i: this.nodeID
-        }
-        this.extendVector(this.viewChange, this.view + 1);
-        this.viewChange[this.view + 1].push(viewChangeMsg);
-        this.send(this.nodeID, 'broadcast', viewChangeMsg);
-        const oldView = this.view;
+        };
+        this.extendVector(this.viewChange, nextView);
+        const tvc = JSON.parse(JSON.stringify(this.viewChangeMsg));        
+        this.viewChange[nextView].push(tvc);
+        this.send(this.nodeID, 'broadcast', tvc);
+        this.oldView = this.view;
+        /*
         // if the next primary is also dead
         const skipToNextView = () => {
             if (this.view === oldView) {
@@ -375,11 +552,16 @@ class PBFTNode extends Node {
         };
         setTimeout(() => {
             skipToNextView();
-        }, 3000);
+        }, 3000);*/
+        
+        this.viewChangeTimeout *= 2;
+        this.executeTimeout *= 2;
+        this.receiveTimeout *= 2;
+        this.logger.info([`doubling timeout ${this.viewChangeTimeout} ${this.executeTimeout} ${this.receiveTimeout}`]);        
     }
 
-    startPrimary() {
-        this.proposeTimer = setInterval(() => {
+    issueRequest() {
+        //this.proposeTimer = setInterval(() => {
             const request = uuid();
             this.digest[request] = {
                 isReceived: true,
@@ -398,6 +580,7 @@ class PBFTNode extends Node {
                 d: request
             };
             this.extendVector2D(this.prePrepare, this.view, this.seq);
+            if (prePrepareMsg === undefined) process.exit(0);
             this.prePrepare[this.view][this.seq].push(prePrepareMsg);
             this.send(this.nodeID, 'broadcast', prePrepareMsg);
             
@@ -412,7 +595,13 @@ class PBFTNode extends Node {
             this.prepare[this.view][this.seq].push(prepareMsg);
             this.send(this.nodeID, 'broadcast', prepareMsg);
             this.seq++;
-        }, this.proposePeriod * 1000);
+        //}, this.proposePeriod * 1000);
+        // do not repeat to issue request
+        /*
+        this.registerTimeEvent(
+            { name: 'issueRequest' }, 
+            this.proposePeriod * 1000
+        );*/
         // stop proposing after 10 sec
         /*
         setTimeout(() => {
@@ -440,16 +629,42 @@ class PBFTNode extends Node {
         });
     }
 
-    constructor(nodeID, nodeNum) {
-        super(nodeID, nodeNum);
+    start() {
+        if (this.isPrimary) {
+            this.issueRequest();
+        }
+        else {
+            this.registerTimeEvent(
+                { 
+                    name: 'receiveTimeout',
+                    params: {
+                        v: this.view
+                    } 
+                }, 
+                this.receiveTimeout * 1000
+            );
+            /*
+            this.receiveTimer = setTimeout(() => {
+                // did not receive any message in receive timeout
+                if (!this.isInViewChange) {
+                    this.logger.info(['did not receive any request']);
+                    this.startViewChange();
+                }
+            }, this.receiveTimeout * 1000);*/
+        }
+
+    }
+
+    constructor(nodeID, nodeNum, network, registerTimeEvent) {
+        super(nodeID, nodeNum, network, registerTimeEvent);
         this.f = (this.nodeNum % 3 === 0) ?
             this.nodeNum / 3 - 1 : Math.floor(this.nodeNum / 3);
         // pbft
         this.view = 0;
-        this.seq = 0;
         this.isPrimary =
             (this.view % this.nodeNum) === (parseInt(this.nodeID) - 1);
         this.checkpointPeriod = 3;
+        this.seq = 0;
         this.isInViewChange = false;
         this.proposePeriod = 2;
         this.lastDecidedSeq = -1;
@@ -457,11 +672,13 @@ class PBFTNode extends Node {
         this.isDecided = false;
         // view change
         // check if a node receive a request in time
-        this.receiveTimeout = 8;
+        this.lambda = config.lambda;
+        this.receiveTimeout = 3 * this.lambda;
         this.hasReceiveRequest = false;
-        this.executeTimeout = 8;
+        this.executeTimeout = 3 * this.lambda;
+        this.viewChangeTimeout = 2 * this.lambda;
         // this makes nodes create checkpoint at n = 0
-        this.lastStableCheckpoint = -this.checkpointPeriod;
+        this.lastStableCheckpoint = 0;
         // log
         this.digest = {};
         this.prePrepare = [];
@@ -469,6 +686,8 @@ class PBFTNode extends Node {
         this.commit = [];
         this.checkpoint = [];
         this.viewChange = [];
+        this.registerTimeEvent({ name: 'start', params: {} }, 0);
+        /*
         const targetStartTime = process.argv[4];
         setTimeout(() => {
             if (this.isPrimary) {
@@ -483,7 +702,8 @@ class PBFTNode extends Node {
                     }
                 }, this.receiveTimeout * 1000);
             }
-        }, targetStartTime - Date.now());
+        }, targetStartTime - Date.now());*/
     }
 }
-const n = new PBFTNode(process.argv[2], process.argv[3]);
+//const n = new PBFTNode(process.argv[2], process.argv[3]);
+module.exports = PBFTNode;

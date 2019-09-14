@@ -1,11 +1,17 @@
 'use strict';
 const Logger = require('../lib/logger');
-const NetworkInterface = require('../lib/network-interface');
 require('../lib/fp');
 
 class Node {
     reportToSystem() {}
-    receive(msg) {}
+
+    triggerMsgEvent(msgEvent) {
+        this.clock = msgEvent.triggeredTime;
+    }
+
+    triggerTimeEvent(timeEvent) {
+        this.clock = timeEvent.triggeredTime;
+    }
 
     send(src, dst, msg) {
         if (this.isCooling) {
@@ -14,34 +20,31 @@ class Node {
         if (dst !== 'system') {
             this.logger.info(['send', dst, JSON.stringify(msg)]);
         }
-        msg.sendTime = Date.now();
-        this.network.send(src, dst, msg);
+        const packet = {
+            src: src,
+            dst: dst,
+            content: msg,
+            sendTime: this.clock
+        };
+        this.network.transfer(packet);
     }
 
-    constructor(nodeID, nodeNum) {
-        process.on('uncaughtException', (err) => {
-            console.log(err);
-        });
+    constructor(nodeID, nodeNum, network, registerTimeEvent) {
         this.nodeID = nodeID;
         this.nodeNum = nodeNum;
-
         this.logger = new Logger(this.nodeID);
-        
         this.isCooling = false;
-        this.network = new NetworkInterface(this.nodeID, undefined, (msg) => {
-            this.receive(msg);
-        });
-        setInterval(() => {
+        this.network = network;
+        this.registerTimeEvent = registerTimeEvent;
+        this.clock = 0;
+        /*
+        this.reportTimer = setInterval(() => {
             this.reportToSystem();
-        }, 1000);
-        process.on('SIGTERM', () => {
-            this.isCooling = true;
-            // close after 1 sec
-            setTimeout(() => {
-                this.network.close();
-                process.exit(0);
-            }, 1000);
-        });
+        }, 1000);*/
+    }
+
+    destroy() {
+        clearInterval(this.reportTimer);
     }
 }
 module.exports = Node;

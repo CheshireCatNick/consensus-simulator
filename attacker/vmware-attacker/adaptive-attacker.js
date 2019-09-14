@@ -5,11 +5,15 @@ const Attacker = require('../attacker');
 
 class AdaptiveAttacker extends Attacker {
 
+    updateParam() {
+        this.byzantines = [];
+        return false;
+    }
+
     attack(packets) {
         const msg = packets[0].content;
         if (this.mode === 'vrf' && 
-            msg.type === 'fl-propose' && 
-            packets.length === 1) {
+            msg.type === 'fl-propose') {
             this.propose.push(msg);
             if (this.propose.length == config.nodeNum) {
                 //console.log('find best vrf except byzantines');
@@ -25,13 +29,13 @@ class AdaptiveAttacker extends Attacker {
                     }
                 });
                 const bestProposal = this.propose[0];
-                console.log(bestProposal);
+                //console.log(bestProposal);
                 // adapt leader
                 if (this.byzantines.has(bestProposal.sender)) {
-                    console.log('lucky VRF');
+                    //console.log('lucky VRF');
                 }
                 else if (this.byzantines.length < this.f) {
-                    console.log('adapting: ', bestProposal.sender);
+                    //console.log('adapting: ', bestProposal.sender);
                     this.byzantines.push(bestProposal.sender);
                 }
                 // send fork value
@@ -51,7 +55,7 @@ class AdaptiveAttacker extends Attacker {
                 this.propose = [];
             }
         }
-        else if (this.mode === 'adaptive' && packets.length === 1) {
+        else if (this.mode === 'adaptive') {
             if (msg.type === 'fl-propose') {
                 this.flPropose.push(msg);
             }
@@ -63,13 +67,14 @@ class AdaptiveAttacker extends Attacker {
                         return (msgA.y < msgB.y) ? 1 : -1;
                     });
                     const bestProposal = this.elect[0];
-                    console.log(bestProposal);
+
+                    //console.log(bestProposal);
                     // adapt leader
                     if (this.byzantines.has(bestProposal.sender)) {
-                        console.log('lucky VRF');
+                        //console.log('lucky VRF');
                     }
                     else if (this.byzantines.length < this.f) {
-                        console.log('adapting: ', bestProposal.sender);
+                        //console.log('adapting: ', bestProposal.sender);
                         this.byzantines.push(bestProposal.sender);
                     }
                     // useless to send fork value here
@@ -98,10 +103,10 @@ class AdaptiveAttacker extends Attacker {
         return packets;
     }
 
-    constructor(network) {
-        super(network);
-        this.f = (config.nodeNum % 3 === 0) ?
-            config.nodeNum / 3 - 1 : Math.floor(config.nodeNum / 3);
+    constructor(transfer, registerTimeEvent) {
+        super(transfer, registerTimeEvent);
+        this.f = (config.nodeNum % 2 === 0) ?
+            config.nodeNum / 2 - 1 : Math.floor(config.nodeNum / 2);
         this.propose = [];
         this.elect = [];
         this.flPropose = [];

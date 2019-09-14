@@ -14,7 +14,7 @@ class VMwareNode extends Node {
     }
 
     decide(v) {
-        clearTimeout(this.BALogicTimer);        
+        //clearTimeout(this.BALogicTimer);
         this.logger.info([`decide on ${v}`]);
         this.isDecided = true;
         this.decidedValue = v;
@@ -32,6 +32,9 @@ class VMwareNode extends Node {
                 this.accepted.Ci = msg.Ci;
                 this.accepted.ki = this.k;
             };
+            this.status = [];
+            this.propose = [];
+            this.commit = [];
             this.k++;
             this.leader = '' + (this.k % this.nodeNum + 1);
             const statusMsg = {
@@ -42,10 +45,20 @@ class VMwareNode extends Node {
                 ki: this.accepted.ki,
                 Ci: this.accepted.Ci
             };
-            this.send(this.nodeID, this.leader, statusMsg);
+            if (this.nodeID === this.leader) {
+                this.status.push(statusMsg);
+            }
+            else {
+                this.send(this.nodeID, this.leader, statusMsg);
+            }
+            this.registerTimeEvent(
+                { name: 'runBALogic', params: { round: 2 } },
+                2 * config.lambda * 1000
+            );
+            /*
             this.BALogicTimer = setTimeout(() => {
                 this.runBALogic(2);
-            }, 2 * config.lambda * 1000);
+            }, 2 * config.lambda * 1000);*/
             break;
         case 2:
             // end of status and start of propose
@@ -76,12 +89,20 @@ class VMwareNode extends Node {
                     CL: this.accepted.Ci
                 };
                 this.send(this.nodeID, 'broadcast', proposeMsg);
-                this.send(this.nodeID, this.nodeID, proposeMsg);
+                this.proposeMsg = proposeMsg.proposeMsg;
+                this.vLi = this.proposeMsg.vL;
+                this.propose.push(this.proposeMsg);
+                //this.send(this.nodeID, this.nodeID, proposeMsg);
                 this.status = [];
             }
+            this.registerTimeEvent(
+                { name: 'runBALogic', params: { round: 3 } },
+                2 * config.lambda * 1000
+            );
+            /*
             this.BALogicTimer = setTimeout(() => {
                 this.runBALogic(3);
-            }, 2 * config.lambda * 1000);
+            }, 2 * config.lambda * 1000);*/
             break;
         case 3:
             // end of propose and start of commit
@@ -95,25 +116,34 @@ class VMwareNode extends Node {
                     vLi: this.vLi
                 };
                 this.send(this.nodeID, 'broadcast', commitMsg);
-                this.send(this.nodeID, this.nodeID, commitMsg);
+                this.commit.push(commitMsg);
+                //this.send(this.nodeID, this.nodeID, commitMsg);
             }
+            this.registerTimeEvent(
+                { name: 'runBALogic', params: { round: 4 } },
+                2 * config.lambda * 1000
+            );
+            /*
             this.BALogicTimer = setTimeout(() => {
                 this.runBALogic(4);
-            }, 2 * config.lambda * 1000);
+            }, 2 * config.lambda * 1000);*/
             break;
         case 4:
             // end of commit and start of notify
-            if (this.propose.some(msg => msg.vL !== this.vLi)) {
+            if (this.propose.some(msg => 
+                    msg.k === this.k && msg.vL !== this.vLi)) {
                 // leader has equivocated
+                this.logger.info(['leader has equivocated, or vLi is undefined']);
                 // do not commit
             }
             else {
-                const C = this.commit.filter(msg => msg.vLi === this.vLi);
-                if (C.length >= this.f + 1) {
+                const C = this.commit.filter(
+                    msg => msg.vLi === this.vLi && msg.k === this.k);
+                if (C.length >= this.nodeNum - this.f) {
                     this.accepted.vi = this.vLi;
                     this.accepted.Ci = C;
                     const proof = 
-                        JSON.parse(JSON.stringify(C)).splice(0, this.f + 1);
+                        JSON.parse(JSON.stringify(C)).splice(0, this.nodeNum - this.f);
                     const notifyMsg = {
                         sender: this.nodeID,
                         type: 'notify',
@@ -125,15 +155,23 @@ class VMwareNode extends Node {
                         Ci: proof
                     };
                     this.send(this.nodeID, 'broadcast', notifyMsg);
-                    this.send(this.nodeID, this.nodeID, notifyMsg);
+                    const k = notifyMsg.Ci[0].k;
+                    this.extendVector(this.notify, k);
+                    this.notify[k].push(notifyMsg);
+                    //this.send(this.nodeID, this.nodeID, notifyMsg);
                 }
             }
             this.propose = [];
             this.commit = [];
             this.vLi = 'undefined';
+            this.registerTimeEvent(
+                { name: 'runBALogic', params: { round: 1 } },
+                2 * config.lambda * 1000
+            );
+            /*
             this.BALogicTimer = setTimeout(() => {
                 this.runBALogic(1);
-            }, 2 * config.lambda * 1000);
+            }, 2 * config.lambda * 1000);*/
             break;
         default:
             this.logger.warning(['unknown round']);
@@ -141,14 +179,16 @@ class VMwareNode extends Node {
 
     }
 
-    receive(msg) {
-        this.logger.info(['recv', JSON.stringify(msg)]);
+    triggerMsgEvent(msgEvent) {
+        super.triggerMsgEvent(msgEvent);
+        const msg = msgEvent.packet.content;        
+        this.logger.info(['recv', this.logger.round(msgEvent.triggeredTime), JSON.stringify(msg)]);
         if (this.isDecided) {
             return;
         }
         switch(msg.type) {
         case 'status':
-            if (this.leader === this.nodeID) {
+            if (this.leader === this.nodeID && msg.k === this.k) {
                 // verify msg.Ci
                 this.status.push(msg);
             }
@@ -166,9 +206,11 @@ class VMwareNode extends Node {
             }
             break;
         case 'propose':
+            if (msg.k !== this.k) return;
             this.propose.push(msg);
             break;
         case 'commit':
+            if (msg.k !== this.k) return;
             this.commit.push(msg);
             break;
         case 'notify':
@@ -219,11 +261,44 @@ class VMwareNode extends Node {
         });
     }
 
-    constructor(nodeID, nodeNum) {
-        super(nodeID, nodeNum);
+    triggerTimeEvent(timeEvent) {
+        super.triggerTimeEvent(timeEvent);
+        if (this.isDecided) {
+            return;
+        }
+        const functionMeta = timeEvent.functionMeta;        
+        switch (functionMeta.name) {
+        case 'start':
+            const initStatusMsg = {
+                sender: this.nodeID,
+                type: 'status',
+                k: this.k,
+                vi: this.accepted.vi,
+                ki: this.accepted.ki,
+                Ci: this.accepted.Ci
+            };
+            if (this.nodeID === this.leader) {
+                this.status.push(initStatusMsg);
+            }
+            else {
+                this.send(this.nodeID, this.leader, initStatusMsg);
+            }
+            this.registerTimeEvent(
+                { name: 'runBALogic', params: { round: 2 } }, 
+                2 * config.lambda * 1000
+            );
+            break;
+        case 'runBALogic':
+            this.runBALogic(functionMeta.params.round);
+            break;
+        }
+    }
+
+    constructor(nodeID, nodeNum, network, registerTimeEvent) {
+        super(nodeID, nodeNum, network, registerTimeEvent);
         //this.isCooling = false;
-        this.f = (this.nodeNum % 3 === 0) ?
-            this.nodeNum / 3 - 1 : Math.floor(this.nodeNum / 3);
+        this.f = (this.nodeNum % 2 === 0) ?
+            this.nodeNum / 2 - 1 : (this.nodeNum - 1) / 2;
         
         // BA related
         // store all accepted
@@ -242,14 +317,9 @@ class VMwareNode extends Node {
         this.notify = [];
         this.isDecided = false;
         this.decidedValue = undefined;
-        const initStatusMsg = {
-            sender: this.nodeID,
-            type: 'status',
-            k: this.k,
-            vi: this.accepted.vi,
-            ki: this.accepted.ki,
-            Ci: this.accepted.Ci
-        };
+        
+        this.registerTimeEvent({ name: 'start', params: {} }, 0);        
+        /*
         const targetStartTime = process.argv[4];
         setTimeout(() => {
             this.send(this.nodeID, this.leader, initStatusMsg);
@@ -257,7 +327,8 @@ class VMwareNode extends Node {
             setTimeout(() => {
                 this.runBALogic(2);
             }, 2 * config.lambda * 1000);
-        }, targetStartTime - Date.now());
+        }, targetStartTime - Date.now());*/
     }
 }
-const n = new VMwareNode(process.argv[2], process.argv[3]);
+//const n = new VMwareNode(process.argv[2], process.argv[3]);
+module.exports = VMwareNode;
